@@ -1,0 +1,163 @@
+
+
+using System;
+using System.Linq;
+using System.Net;
+using System.Text;
+using cAlgo.API;
+using System.Text.Json;
+
+using System.Collections.Generic;
+using cAlgo.API.Internals;
+
+namespace cAlgo.Robots
+{
+    public class Object
+    {
+        public string Symbolname { get; set; }
+        public Double Cost { get; set; }
+
+        public int Pridiction_size { get; set; }
+        
+    
+
+        public IList<Double> Open { get; set; }
+        public IList<Double> High { get; set; }
+        public IList<Double> Low { get; set; }
+        public IList<Double> Close { get; set; }
+        
+
+
+    }
+
+    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
+    public class MLBot : Robot
+    {
+        private const string Name = "MLBot";
+
+        [Parameter("Base Url", DefaultValue = "http://localhost:5000/predict")]
+        public string BaseUrl { get; set; }
+
+
+        public const int BatchSize = 20;
+        public const int WindowSize = 20;
+        public const int MAPeriods = 30;
+
+        [Parameter("Pips", MinValue = 1, DefaultValue = 8)]
+        public int Pips { get; set; }
+
+        [Parameter("Prediction Size", MinValue = 1, DefaultValue = 4)]
+        public int PredSize { get; set; }
+
+        [Parameter("Volume", Group = "Standard", DefaultValue = 20000)]
+        public double Volume { get; set; }
+
+        [Parameter("Max Spread Limit (Pips)", Group = "Standard", DefaultValue = 1.5)]
+        public double MaxSpreadLimitInPips { get; set; }
+
+        private WebClient _webClient;
+        private double _maxSpreadLimitAbsolute = 0;
+        private string _baseUrlParam;
+        public Object Op { get; set; }
+
+        public Object Getjson()
+        {         IList<Double> open = new List<Double>();
+        IList<Double> high=new List<Double>();
+         IList<Double> low=new List<Double>() ;
+       IList<Double> close=new List<Double>() ;
+             Object op=new Object{
+        Cost=0.0,
+        Pridiction_size=4,
+        Symbolname="opopps",
+        Close={},
+        High={},
+        Low={},
+        Open={},
+        };
+            op.Pridiction_size = 4;
+            op.Symbolname = Symbol.Name.ToLower();
+            op.Cost = _maxSpreadLimitAbsolute ;
+             for (int i = WindowSize + MAPeriods - 1; i >= 0; i--)
+            {
+               open.Add(Bars.Last(i).Open);
+               high.Add(Bars.Last(i).High);
+               low.Add(Bars.Last(i).Low);
+               close.Add(Bars.Last(i).Close);
+            }
+            op.Open=open;
+            op.High=high;
+            op.Close=close;
+            op.Low=low;
+            
+
+
+            return op;
+        }
+
+
+        private TradeType? GetMLPrediction()
+        {
+
+
+            Op = Getjson();
+            string jsonString = JsonSerializer.Serialize(Op);
+            Print("hii:{0}",jsonString);
+            _webClient.Headers[HttpRequestHeader.ContentType] = "application/json";
+
+
+             string tradeType = _webClient.UploadString(_baseUrlParam, jsonString);
+            switch (tradeType)
+            {
+                case "1":
+                    return TradeType.Buy;
+                case "-1":
+                    return TradeType.Sell;
+                case "0":
+                    return null;
+                default:
+                    throw new InvalidOperationException("Not an expected return from the ML: " + (tradeType ?? "(null)"));
+            }
+        }
+
+        protected override void OnStart()
+        {
+            _webClient = new WebClient();
+            _maxSpreadLimitAbsolute = MaxSpreadLimitInPips * Symbol.PipSize;
+            _baseUrlParam = BaseUrl + "/" ;
+        }
+
+        protected override void OnBar()
+        {
+            // Prevents running this in production
+            if (!IsBacktesting)
+            {
+                return;
+            }
+            if ((Ask - Bid) > _maxSpreadLimitAbsolute)
+            {
+                return;
+            }
+
+            if (Positions.FindAll(Name, SymbolName).Any())
+            {
+                return;
+            }
+
+            if (Bars.Count <= WindowSize + MAPeriods - 1)
+            {
+                return;
+            }
+
+            TradeType? tradeType = GetMLPrediction();
+
+            Console.WriteLine("hii");
+            if (tradeType == null)
+            {
+                return;
+            }
+
+            ExecuteMarketOrder(tradeType.Value, Symbol.Name, Volume, Name, 8, 100);
+        }
+
+    }
+}
