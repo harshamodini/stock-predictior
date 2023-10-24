@@ -40,9 +40,4 @@ Follow these instructions to set up and run the project on your local machine.
 
 This project was developed for educational purposes. It does not provide financial advice, and all predictions should be considered as experiments rather than financial recommendations.
 
-## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-```
-
-You can save this content in a .md file and use it as your project's README. Make sure to update any placeholders such as the project's GitHub repository URL and username accordingly.
