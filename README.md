@@ -1,4 +1,4 @@
-Certainly, here's the README content in Markdown (.md) format:
+
 
 
 # Stock Market Prediction with Machine Learning and Deep Learning
